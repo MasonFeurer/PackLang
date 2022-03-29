@@ -2,9 +2,10 @@ use std::fmt::Debug;
 use crate::compiler::tokens::SrcScope;
 use crate::debug::bash_tools::*;
 
-pub struct ErrorInfo<'a, 'b> {
+pub struct ErrorInfo<'a, 'b, 'c> {
 	pub cause: &'a str,
-	pub more: &'b str,
+	pub pointer: &'b str,
+	pub context: Option<&'c str>,
 	pub help: Option<Help>,
 }
 
@@ -12,18 +13,6 @@ pub struct Help {
 	pub msg: String,
 	pub source: String,
 	pub line: usize,
-}
-
-static mut WARNINGS:Vec<String> = Vec::new();
-static mut ERRORS:Vec<String> = Vec::new();
-
-pub fn show_all() {
-	for warning in unsafe { &WARNINGS } {
-		println!("{}", warning);
-	}
-	for error in unsafe { &ERRORS } {
-		println!("{}", error);
-	}
 }
 
 #[derive(Debug)]
@@ -41,14 +30,6 @@ impl CompileErr {
 	pub fn fatal(self) -> ! {
 		println!("{}", self.msg());
 		panic!("fatal compiling error");
-	}
-	pub fn save(&self) {
-		unsafe {
-			match self {
-				Self::Error(msg) => ERRORS.push(msg.clone()),
-				Self::Warning(msg) => WARNINGS.push(msg.clone()),
-			}
-		}
 	}
 }
 
@@ -68,22 +49,16 @@ impl<T: Debug> CompileResult<T> {
 			Self::Err(err) => err.fatal(),
 		}
 	}
-	pub fn save(self) -> Self {
-		if let Self::Err(err) = &self {
-			err.save();
-		}
-		self
-	}
 }
 
-pub fn warning(scope:&SrcScope, info:ErrorInfo) -> CompileErr {
+pub fn warning(scope:SrcScope, info:ErrorInfo) -> CompileErr {
 	CompileErr::Warning(create_error(
 		Fmt::DecorColor(BOLD,YELLOW),
 		"warning",
 		scope, info
 	))
 }
-pub fn error(scope:&SrcScope, info:ErrorInfo) -> CompileErr {
+pub fn error(scope:SrcScope, info:ErrorInfo) -> CompileErr {
 	CompileErr::Error(create_error(
 		Fmt::DecorColor(BOLD,RED),
 		"error",
@@ -94,7 +69,7 @@ pub fn error(scope:&SrcScope, info:ErrorInfo) -> CompileErr {
 fn create_error(
 	fmt: Fmt,
 	ty: &str,
-	scope: &SrcScope,
+	scope: SrcScope,
 	info: ErrorInfo
 ) -> String {
 	let mut msg = format!(
@@ -105,17 +80,22 @@ fn create_error(
 		info.cause,
 		Fmt::Reset
 	);
+	if let Some(context) = info.context {
+		msg.push_str("context: ");
+		msg.push_str(context);
+		msg.push('\n');
+	}
 
 	let mut fmt = DebugLines::new();
 	underline_scope(
 		&mut fmt,
 		scope,
-		info.more,
+		info.pointer,
 		Fmt::DecorColor(PLAIN, RED),
 		Fmt::DecorColor(BOLD, RED),
 	);
 	if let Some(help) = info.help {
-		fmt_help(&mut fmt, help)
+		fmt.help(help);
 	}
 
 	msg.push_str(fmt.fmt().as_str());
@@ -124,8 +104,8 @@ fn create_error(
 
 fn underline_scope(
 	fmt: &mut DebugLines,
-	scope: &SrcScope,
-	more: &str,
+	scope: SrcScope,
+	pointer: &str,
 	source_color: Fmt,
 	underline_color: Fmt,
 ) {
@@ -150,7 +130,7 @@ fn underline_scope(
 			ch: '^',
 			offset: scope.start-first_line_pos,
 			len: scope.len(),
-			msg: more.to_owned(),
+			msg: pointer.to_owned(),
 			color: underline_color,
 		});
 	}
@@ -168,26 +148,11 @@ fn underline_scope(
 			ch: '^',
 			offset: 0,
 			len: scope.end-line_pos,
-			msg: more.to_owned(),
+			msg: pointer.to_owned(),
 			color: underline_color,
 			group_color: underline_color,
 		});
 	}
-}
-
-fn fmt_help(fmt:&mut DebugLines, help:Help) {
-	fmt.push_line(DebugLine::Text(format!(
-		"{}help: {}{}",
-		Fmt::DecorColor(BOLD, PURPLE),
-		Fmt::DecorColor(BOLD, LIGHT_WHITE),
-		help.msg,
-	)));
-	fmt.push_line(DebugLine::Source {
-		line: help.line,
-		source: help.source,
-		color: Fmt::DecorColor(PLAIN, LIGHT_CYAN),
-	});
-	fmt.push_line(DebugLine::Blank);
 }
 
 enum DebugLine {
@@ -305,6 +270,20 @@ impl DebugLines {
 	}
 	pub fn push_line(&mut self, line:DebugLine) {
 		self.lines.push(line);
+	}
+	pub fn help(&mut self, help:Help) {
+		self.push_line(DebugLine::Text(format!(
+			"{}help: {}{}",
+			Fmt::DecorColor(BOLD, PURPLE),
+			Fmt::DecorColor(BOLD, LIGHT_WHITE),
+			help.msg,
+		)));
+		self.push_line(DebugLine::Source {
+			line: help.line,
+			source: help.source,
+			color: Fmt::DecorColor(PLAIN, LIGHT_CYAN),
+		});
+		self.push_line(DebugLine::Blank);
 	}
 
 	pub fn fmt(&self) -> String {

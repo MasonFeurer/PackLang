@@ -5,21 +5,21 @@ scoreboard dummy math;
 function add(a, b -> result : math) {
  unsafe {
   scoreboard players operation result math = a math;
-  scoreboard players operation resutl math += b math;
+  scoreboard players operation result math += b math;
   }
 }
 
-command print_score(t:target, o:objective) {
+inline print_score(t:target, o:objective) {
  unsafe {
   tellraw @a ["score":{"player":"$t","objective":"$o"}];
  }
 }
 
-function main1 {
+function main1() {
  add(42, 83);
 }
 
-function main2 {
+function main2() {
  |sum = add(42, 83);
  print_score(|sum);
  print_score(|sum);

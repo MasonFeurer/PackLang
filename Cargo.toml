@@ -1,5 +1,5 @@
 [package]
-name = "mccs2"
+name = "pack-lang"
 version = "0.1.0"
 edition = "2021"
 

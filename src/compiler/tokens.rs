@@ -1,9 +1,8 @@
-use std::fmt::{Debug, Display, Formatter};
-use crate::debug::bash_tools::*;
+use std::fmt::{Debug, Formatter};
 use crate::compiler::files::FileRef;
 use crate::debug::errors::{CompileResult, error, ErrorInfo, Help};
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum Token {
 	Ident(Ident),
 	Str(Str),
@@ -36,15 +35,15 @@ impl Token {
 		Self::Group(Group { delimiter, tokens, scope })
 	}
 
-	pub fn scope(&self) -> &SrcScope {
+	pub fn scope(&self) -> SrcScope {
 		match self {
-			Self::Ident(e) => &e.scope,
-			Self::Str(e) => &e.scope,
-			Self::Int(e) => &e.scope,
-			Self::Sep(e) => &e.scope,
-			Self::Symbol(e) => &e.scope,
-			Self::End(e) => &e.scope,
-			Self::Group(e) => &e.scope,
+			Self::Ident(e) => e.scope,
+			Self::Str(e) => e.scope,
+			Self::Int(e) => e.scope,
+			Self::Sep(e) => e.scope,
+			Self::Symbol(e) => e.scope,
+			Self::End(e) => e.scope,
+			Self::Group(e) => e.scope,
 		}
 	}
 
@@ -70,6 +69,9 @@ impl Token {
 		if let Self::Group(_) = self { true } else { false }
 	}
 
+	pub fn as_non_end(&self) -> Option<&Token> {
+		if let Self::End(_) = self { None } else { Some(self) }
+	}
 	pub fn as_ident(&self) -> Option<&Ident> {
 		if let Self::Ident(e) = self { Some(e) } else { None }
 	}
@@ -107,237 +109,195 @@ impl Token {
 			if e.value.as_str() == value { Some(e) } else { None }
 		} else { None }
 	}
-	
-	pub fn as_ok(&self) -> CompileResult<Self> {
-		match self {
-			Self::Ident(_) => CompileResult::Ok(self.clone()),
-			Self::Str(_) => CompileResult::Ok(self.clone()),
-			Self::Int(_) => CompileResult::Ok(self.clone()),
-			Self::Sep(_) => CompileResult::Ok(self.clone()),
-			Self::Symbol(_) => CompileResult::Ok(self.clone()),
-			Self::End(_) => CompileResult::Ok(self.clone()),
-			Self::Group(_) => CompileResult::Ok(self.clone()),
-		}
-	}
 
-	pub fn expect_non_end(&self, more:&str, help:Option<Help>) -> CompileResult<Token> {
-		match self {
-			Token::End(_) => Self::invalid_token(self, more, help),
-			_ => self.as_ok()
-		}
-	}
-	pub fn expect_ident(&self, more:&str, help:Option<Help>) -> CompileResult<Ident> {
-		match self {
-			Token::Ident(e) => e.as_ok(),
-			_ => Self::invalid_token(self, more, help),
-		}
-	}
-	pub fn expect_string(&self, more:&str, help:Option<Help>) -> CompileResult<Str> {
-		match self {
-			Token::Str(e) => e.as_ok(),
-			_ => Self::invalid_token(self, more, help),
-		}
-	}
-	pub fn expect_int(&self, more:&str, help:Option<Help>) -> CompileResult<Int> {
-		match self {
-			Token::Int(e) => e.as_ok(),
-			_ => Self::invalid_token(self, more, help),
-		}
-	}
-	pub fn expect_sep(&self, more:&str, help:Option<Help>) -> CompileResult<Sep> {
-		match self {
-			Token::Sep(e) => e.as_ok(),
-			_ => Self::invalid_token(self, more, help),
-		}
-	}
-	pub fn expect_symbol(&self, more:&str, help:Option<Help>) -> CompileResult<Symbol> {
-		match self {
-			Token::Symbol(e) => e.as_ok(),
-			_ => Self::invalid_token(self, more, help),
-		}
-	}
-	pub fn expect_end(&self, more:&str, help:Option<Help>) -> CompileResult<End> {
-		match self {
-			Token::End(e) => e.as_ok(),
-			_ => Self::invalid_token(self, more, help),
-		}
-	}
-	pub fn expect_group(&self, more:&str, help:Option<Help>) -> CompileResult<Group> {
-		match self {
-			Token::Group(e) => e.as_ok(),
-			_ => Self::invalid_token(self, more, help),
-		}
-	}
-
-	pub fn expect_ident_w(&self, value:&str, more:&str, help:Option<Help>) -> CompileResult<Ident> {
-		match self {
-			Self::Ident(e) => {
-				if e.value.as_str() == value { e.as_ok() }
-				else { Self::invalid_token(self, more, help) }
-			}
-			_ => Self::invalid_token(self, more, help)
-		}
-	}
-	pub fn expect_sep_w(&self, value:char, more:&str, help:Option<Help>) -> CompileResult<Sep> {
-		match self {
-			Self::Sep(e) => {
-				if e.value == value { e.as_ok() }
-				else { Self::invalid_token(self, more, help) }
-			}
-			_ => Self::invalid_token(self, more, help)
-		}
-	}
-	pub fn expect_group_w(&self, delimiter:Delimiter, more:&str, help:Option<Help>) -> CompileResult<Group> {
-		match self {
-			Self::Group(e) => {
-				if e.delimiter == delimiter { e.as_ok() }
-				else { Self::invalid_token(self, more, help) }
-			}
-			_ => Self::invalid_token(self, more, help)
-		}
-	}
-
-	fn invalid_token<T: Debug>(token:&Token, more:&str, help:Option<Help>) -> CompileResult<T> {
+	fn invalid<T: Debug>(
+		&self,
+		expected:&str,
+		context:Option<&str>,
+		help:Option<Help>
+	) -> CompileResult<T> {
 		CompileResult::Err(error(
-			token.scope(),
-			ErrorInfo {
-				cause: format!("invalid token: {}", token).as_str(),
-				more, help
+			self.scope(), ErrorInfo {
+				cause: "Invalid token",
+				pointer: format!("expected {}, found {:#1?}", expected, self).as_str(),
+				context,
+				help
 			}
 		))
 	}
 
-	pub fn display(&self) -> String {
+	pub fn expect_non_end(&self, context:Option<&str>, help:Option<Help>) -> CompileResult<Token> {
 		match self {
-			Self::Ident(e) => e.display(),
-			Self::Str(e) => e.display(),
-			Self::Int(e) => e.display(),
-			Self::Sep(e) => e.display(),
-			Self::Symbol(e) => e.display(),
-			Self::End(e) => e.display(),
-			Self::Group(e) => e.display(),
+			Token::End(_) => self.invalid("non End()", context, help),
+			_ => CompileResult::Ok(self.clone())
+		}
+	}
+	pub fn expect_ident(&self, context:Option<&str>, help:Option<Help>) -> CompileResult<Ident> {
+		match self {
+			Token::Ident(e) => CompileResult::Ok(e.clone()),
+			_ => self.invalid("Ident()", context, help),
+		}
+	}
+	pub fn expect_string(&self, context:Option<&str>, help:Option<Help>) -> CompileResult<Str> {
+		match self {
+			Token::Str(e) => CompileResult::Ok(e.clone()),
+			_ => self.invalid("Str()", context, help),
+		}
+	}
+	pub fn expect_int(&self, context:Option<&str>, help:Option<Help>) -> CompileResult<Int> {
+		match self {
+			Token::Int(e) => CompileResult::Ok(e.clone()),
+			_ => self.invalid("int", context, help),
+		}
+	}
+	pub fn expect_sep(&self, context:Option<&str>, help:Option<Help>) -> CompileResult<Sep> {
+		match self {
+			Token::Sep(e) => CompileResult::Ok(e.clone()),
+			_ => self.invalid("Sep()", context, help),
+		}
+	}
+	pub fn expect_symbol(&self, context:Option<&str>, help:Option<Help>) -> CompileResult<Symbol> {
+		match self {
+			Token::Symbol(e) => CompileResult::Ok(e.clone()),
+			_ => self.invalid("Symbol()", context, help),
+		}
+	}
+	pub fn expect_end(&self, context:Option<&str>, help:Option<Help>) -> CompileResult<End> {
+		match self {
+			Token::End(e) => CompileResult::Ok(e.clone()),
+			_ => self.invalid("End()", context, help),
+		}
+	}
+	pub fn expect_group(&self, context:Option<&str>, help:Option<Help>) -> CompileResult<Group> {
+		match self {
+			Token::Group(e) => CompileResult::Ok(e.clone()),
+			_ => self.invalid("Group", context, help),
+		}
+	}
+
+	pub fn expect_ident_w(&self, value:&str, context:Option<&str>, help:Option<Help>) -> CompileResult<Ident> {
+		let err = self.invalid(format!(
+			"Word(\"{}\")", value
+		).as_str(), context, help);
+		match self {
+			Self::Ident(e) => {
+				if e.value.as_str() == value { CompileResult::Ok(e.clone()) }
+				else { err }
+			}
+			_ => err
+		}
+	}
+	pub fn expect_sep_w(&self, value:char, context:Option<&str>, help:Option<Help>) -> CompileResult<Sep> {
+		let err = self.invalid(format!(
+			"Sep('{}')", value
+		).as_str(), context, help);
+		match self {
+			Self::Sep(e) => {
+				if e.value == value { CompileResult::Ok(e.clone()) }
+				else { err }
+			}
+			_ => err
+		}
+	}
+	pub fn expect_group_w(&self, delimiter:Delimiter, context:Option<&str>, help:Option<Help>) -> CompileResult<Group> {
+		let err = self.invalid(format!(
+			"Group<{:?}>", delimiter
+		).as_str(), context, help);
+		match self {
+			Self::Group(e) => {
+				if e.delimiter == delimiter { CompileResult::Ok(e.clone()) }
+				else { err }
+			}
+			_ => err
 		}
 	}
 }
-impl Display for Token {
+impl Debug for Token {
 	fn fmt(&self, f:&mut Formatter<'_>) -> std::fmt::Result {
-		f.write_str(self.display().as_str())
+		match self {
+			Self::Ident(e) => Debug::fmt(e, f),
+			Self::Str(e) => Debug::fmt(e, f),
+			Self::Int(e) => Debug::fmt(e, f),
+			Self::Sep(e) => Debug::fmt(e, f),
+			Self::Symbol(e) => Debug::fmt(e, f),
+			Self::End(e) => Debug::fmt(e, f),
+			Self::Group(e) => Debug::fmt(e, f),
+		}
 	}
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Ident {
 	pub value: String,
 	pub scope: SrcScope,
 }
-impl Ident {
-	pub fn display(&self) -> String {
-		format!("`{}`", self.value)
-	}
-	pub fn as_ok(&self) -> CompileResult<Self> {
-		CompileResult::Ok(self.clone())
-	}
-}
-impl Display for Ident {
+impl Debug for Ident {
 	fn fmt(&self, f:&mut Formatter<'_>) -> std::fmt::Result {
-		f.write_str(self.display().as_str())
+		f.write_str("Ident(")?;
+		Debug::fmt(&self.value, f)?;
+		f.write_str(")")
 	}
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Str {
 	pub value: String,
 	pub scope: SrcScope,
 }
-impl Str {
-	pub fn display(&self) -> String {
-		format!("\"{}\"", self.value)
-	}
-	pub fn as_ok(&self) -> CompileResult<Self> {
-		CompileResult::Ok(self.clone())
-	}
-}
-impl Display for Str {
+impl Debug for Str {
 	fn fmt(&self, f:&mut Formatter<'_>) -> std::fmt::Result {
-		f.write_str(self.display().as_str())
+		f.write_str("Str(")?;
+		Debug::fmt(&self.value, f)?;
+		f.write_str(")")
 	}
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Int {
 	pub value: i32,
 	pub scope: SrcScope,
 }
-impl Int {
-	pub fn display(&self) -> String {
-		self.value.to_string()
-	}
-	pub fn as_ok(&self) -> CompileResult<Self> {
-		CompileResult::Ok(self.clone())
-	}
-}
-impl Display for Int {
+impl Debug for Int {
 	fn fmt(&self, f:&mut Formatter<'_>) -> std::fmt::Result {
-		f.write_str(self.display().as_str())
+		f.write_str("Int(")?;
+		Debug::fmt(&self.value, f)?;
+		f.write_str(")")
 	}
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Sep {
 	pub value: char,
 	pub scope: SrcScope,
 }
-impl Sep {
-	pub fn display(&self) -> String {
-		format!("`{}`", self.value)
-	}
-	pub fn as_ok(&self) -> CompileResult<Self> {
-		CompileResult::Ok(self.clone())
-	}
-}
-impl Display for Sep {
+impl Debug for Sep {
 	fn fmt(&self, f:&mut Formatter<'_>) -> std::fmt::Result {
-		f.write_str(self.display().as_str())
+		f.write_str("Sep(")?;
+		Debug::fmt(&self.value, f)?;
+		f.write_str(")")
 	}
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Symbol {
 	pub value: String,
 	pub scope: SrcScope,
 }
-impl Symbol {
-	pub fn display(&self) -> String {
-		format!("`{}`", self.value)
-	}
-	pub fn as_ok(&self) -> CompileResult<Self> {
-		CompileResult::Ok(self.clone())
-	}
-}
-impl Display for Symbol {
+impl Debug for Symbol {
 	fn fmt(&self, f:&mut Formatter<'_>) -> std::fmt::Result {
-		f.write_str(self.display().as_str())
+		f.write_str("Symbol(")?;
+		Debug::fmt(&self.value, f)?;
+		f.write_str(")")
 	}
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct End {
 	pub scope: SrcScope,
 }
-impl End {
-	pub fn display(&self) -> String {
-		format!(
-			"{}end{}",
-			Fmt::DecorColor(BOLD,LIGHT_WHITE), Fmt::Reset
-		)
-	}
-	pub fn as_ok(&self) -> CompileResult<Self> {
-		CompileResult::Ok(self.clone())
-	}
-}
-impl Display for End {
+impl Debug for End {
 	fn fmt(&self, f:&mut Formatter<'_>) -> std::fmt::Result {
-		f.write_str(self.display().as_str())
+		f.write_str("End()")
 	}
 }
 
@@ -367,30 +327,27 @@ impl Delimiter {
 	}
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Group {
 	pub delimiter: Delimiter,
 	pub tokens: Vec<Token>,
 	pub scope: SrcScope,
 }
-impl Group {
-	pub fn display(&self) -> String {
-		let mut string = String::new();
-		string.push(self.delimiter.opening());
-		for token in &self.tokens {
-			string.push_str(token.display().as_str());
-			string.push(' ');
-		}
-		string.push(self.delimiter.closing());
-		string
-	}
-	pub fn as_ok(&self) -> CompileResult<Self> {
-		CompileResult::Ok(self.clone())
-	}
-}
-impl Display for Group {
+impl Debug for Group {
 	fn fmt(&self, f:&mut Formatter<'_>) -> std::fmt::Result {
-		f.write_str(self.display().as_str())
+		if let Some(_width) = f.width() {
+			f.write_str("Group<")?;
+			Debug::fmt(&self.delimiter, f)?;
+			f.write_str(">(")?;
+			f.write_str("...")?;
+			f.write_str(")")
+		} else {
+			f.write_str("Group<")?;
+			Debug::fmt(&self.delimiter, f)?;
+			f.write_str(">(")?;
+			Debug::fmt(&self.tokens, f)?;
+			f.write_str(")")
+		}
 	}
 }
 
@@ -402,7 +359,7 @@ pub struct SrcScope {
 }
 impl SrcScope {
 	// NOTE: expects `other` to appear after `self` in the source
-	pub fn join(&self, other:&Self) -> Self {
+	pub fn join(&self, other:Self) -> Self {
 		assert_eq!(self.file, other.file);
 		SrcScope {
 			start: self.start,

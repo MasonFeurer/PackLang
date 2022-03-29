@@ -50,9 +50,10 @@ impl Lexer {
 			}
 			let scope = self.scope(opening_pos, self.index);
 			if !found_closing {
-				error(&scope, ErrorInfo {
+				error(scope, ErrorInfo {
 					cause: "missing closing quote",
-					more: "opening quote is missing a matching closing quote",
+					pointer: "closing quote not found",
+					context: Some("string"),
 					help: None,
 				}).fatal();
 			}
@@ -91,9 +92,10 @@ impl Lexer {
 			let scope = self.len_scope(value.len());
 			let value = match value.parse() {
 				Ok(value) => value,
-				Err(err) => error(&scope, ErrorInfo {
+				Err(err) => error(scope, ErrorInfo {
 					cause: "invalid integer literal",
-					more: format!("failed to parse integer, reason: {}", err).as_str(),
+					pointer: format!("failed to parse integer, reason: {}", err).as_str(),
+					context: Some("integer"),
 					help: None,
 				}).fatal()
 			};
@@ -121,9 +123,10 @@ impl Lexer {
 			let opening_pos = self.index;
 			let Some(tokens) = self.get_group_tokens(delimiter.closing()) else {
 				let scope = self.scope(opening_pos, opening_pos+1);
-				error(&scope, ErrorInfo {
+				error(scope, ErrorInfo {
 					cause: "missing closing delimiter",
-					more: "opening delimiter doesn't have a matching closing delimiter",
+					pointer: "opening delimiter doesn't have a matching closing delimiter",
+					context: Some("group"),
 					help: None,
 				}).fatal();
 			};
@@ -132,9 +135,10 @@ impl Lexer {
 		}
 
 		self.index += 1;
-		error(&self.len_scope(1), ErrorInfo {
+		error(self.len_scope(1), ErrorInfo {
 			cause: "illegal character",
-			more: "this character does not start a token",
+			pointer: "this character does not start a token",
+			context: Some("lexer"),
 			help: None,
 		}).fatal();
 	}
