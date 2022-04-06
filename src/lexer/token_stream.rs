@@ -1,6 +1,6 @@
 use std::fmt::Debug;
-use crate::compiler::parser::Path;
-use crate::compiler::tokens::*;
+use crate::lexer::tokens::Token;
+use crate::parser::Path;
 
 pub trait TokenList {
 	fn as_list(&self) -> &Vec<Token>;

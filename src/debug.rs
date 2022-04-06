@@ -1,6 +1,7 @@
 use std::fmt::{Debug, Formatter};
-use crate::compiler::parser::{Datapack, FunArgs, Function, Inline, InlineArg, Scoreboard};
+use crate::parser::{Datapack, FunArgs, Function, Inline, InlineArg, Scoreboard};
 use crate::compiler::tokens::{Group, Token};
+use crate::lexer::tokens::{Group, Token};
 
 pub mod bash_tools;
 pub mod errors;

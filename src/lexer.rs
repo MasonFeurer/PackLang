@@ -1,6 +1,10 @@
-use crate::compiler::files::FileRef;
-use crate::compiler::tokens::{Delimiter, SrcScope, Token};
+use files::FileRef;
 use crate::debug::errors::{error, ErrorInfo};
+use crate::lexer::tokens::{Delimiter, SrcScope, Token};
+
+pub mod files;
+pub mod tokens;
+pub mod token_stream;
 
 pub struct Lexer {
 	file: FileRef,
@@ -28,7 +32,7 @@ impl Lexer {
 				tokens.push(token);
 			}
 		};
-		tokens.push(Token::end(self.len_scope(1)));
+		tokens.push(Token::end(self.len_scope(0)));
 		tokens
 	}
 

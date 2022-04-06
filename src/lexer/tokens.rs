@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Formatter};
-use crate::compiler::files::FileRef;
 use crate::debug::errors::{CompileResult, error, ErrorInfo, Help};
+use crate::files::FileRef;
 
 #[derive(Clone)]
 pub enum Token {

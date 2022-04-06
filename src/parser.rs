@@ -1,7 +1,7 @@
 use std::fmt::{Debug};
-use crate::compiler::token_stream::{TokenIter, TokenList};
-use crate::compiler::tokens::{Delimiter, Group, Ident, Sep, SrcScope, Symbol, Token};
 use crate::debug::errors::{Help, CompileResult, ErrorInfo, error};
+use crate::lexer::token_stream::{TokenIter, TokenList};
+use crate::lexer::tokens::{Delimiter, Group, Ident, Sep, SrcScope, Symbol, Token};
 
 pub struct Parser {
 	pub tokens: TokenIter,

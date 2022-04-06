@@ -1,14 +1,16 @@
 #![feature(let_else)]
 #![allow(dead_code)]
 
-use crate::compiler::files;
-use crate::compiler::lexer::Lexer;
-use crate::compiler::parser::Parser;
+use lexer::files;
+use lexer::Lexer;
+use parser::Parser;
 use crate::debug::errors::CompileErr;
 use crate::debug::NewDebugTree;
 
 pub mod debug;
 pub mod compiler;
+pub mod lexer;
+pub mod parser;
 
 fn main() -> Result<(), CompileErr> {
 	files::init();
